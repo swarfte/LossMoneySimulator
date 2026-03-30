@@ -19,8 +19,8 @@ STOCK_POOL = [
     {"symbol": "AMD", "industry": "半导体行业"},
     {"symbol": "GOOGL", "industry": "互联网行业"},
     # 新增热门宽基/行业ETF（11只，美股成交量最高的核心交易标的）
-    {"symbol": "QQQ", "industry": "美股指数 (纳斯达克100)"},
-    {"symbol": "VOO", "industry": "美股指数 (标普500)"},
+    {"symbol": "QQQ", "industry": "美股指数"},
+    {"symbol": "VOO", "industry": "美股指数"},
     {"symbol": "TQQQ", "industry": "美股指数 (纳指三倍做多)"},
     {"symbol": "SQQQ", "industry": "美股指数 (纳指三倍做空)"},
     {"symbol": "SOXL", "industry": "行业ETF (半导体三倍做多)"},
