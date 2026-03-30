@@ -1,0 +1,12 @@
+[project]
+name = "lossmoneysimulator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.0.3",
+    "djangorestframework>=3.17.1",
+    "pandas>=3.0.1",
+    "yfinance>=1.2.0",
+]
