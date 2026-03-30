@@ -1,443 +1,336 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>盲盘炒股挑战</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body class="bg-slate-900 text-slate-100 min-h-screen">
-    <div id="app" class="p-4 md:p-8 max-w-7xl mx-auto">
-      <!-- 开始界面 -->
-      <div
-        id="setup-screen"
-        class="flex items-center justify-center min-h-[80vh]"
-      >
-        <div
-          class="max-w-md w-full bg-slate-800 rounded-2xl p-8 shadow-2xl border border-slate-700 text-center"
-        >
-          <h1
-            class="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent"
-          >
-            盲盘挑战 Pro
-          </h1>
-          <p class="text-slate-400 mb-8">支持多空双向，自由控制仓位</p>
-
-          <div class="space-y-4 mb-8 text-left bg-slate-900/50 p-6 rounded-xl">
-            <h3 class="font-semibold text-blue-400">新规则:</h3>
-            <ul class="list-disc list-inside text-sm text-slate-300 space-y-2">
-              <li>初始资金 $20,000</li>
-              <li>可自由决定买卖股数</li>
-              <li>支持多空同时持有</li>
-            </ul>
-          </div>
-
-          <button
-            onclick="startNewGame()"
-            class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all"
-          >
-            开始挑战
-          </button>
-        </div>
-      </div>
-
-      <!-- 游戏界面 (默认隐藏) -->
-      <div id="game-screen" class="hidden">
-        <!-- 顶部状态栏 -->
-        <header
-          class="flex flex-wrap justify-between items-center mb-6 gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700"
-        >
-          <div class="flex items-center gap-4">
-            <div class="bg-slate-700 px-4 py-2 rounded-lg">
-              <span class="text-xs text-slate-400 block">当前标的</span>
-              <span id="industry-name" class="font-bold text-lg"
-                >加载中...</span
-              >
-            </div>
-            <div>
-              <span class="text-xs text-slate-400 block">进度</span>
-              <span id="progress-text" class="font-mono font-bold">0 / 0</span>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-6">
-            <div class="text-right">
-              <span class="text-xs text-slate-400 block">现金</span>
-              <span id="cash-display" class="font-bold text-xl text-white"
-                >$20,000.00</span
-              >
-            </div>
-            <div class="text-right">
-              <span class="text-xs text-slate-400 block">净资产</span>
-              <span id="portfolio-display" class="font-bold text-xl text-white"
-                >$20,000.00</span
-              >
-            </div>
-          </div>
-        </header>
-
-        <!-- 主体区域 -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <!-- 左边：图表 -->
-          <div
-            class="lg:col-span-8 bg-slate-800 rounded-2xl p-6 border border-slate-700 flex flex-col"
-          >
-            <div class="flex justify-between items-end mb-4">
-              <div>
-                <h2 id="current-price" class="text-2xl font-bold text-white">
-                  $0.00
-                </h2>
-                <p id="current-date" class="text-slate-400 text-sm">-</p>
-              </div>
-            </div>
-            <div class="flex-1 h-[400px] relative">
-              <canvas id="priceChart"></canvas>
-            </div>
-          </div>
-
-          <!-- 右边：持仓与交易 -->
-          <div class="lg:col-span-4 flex flex-col gap-6">
-            <!-- 持仓情况 -->
-            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-              <h3 class="text-lg font-bold mb-4">当前持仓</h3>
-              <div class="grid grid-cols-2 gap-4">
-                <div
-                  class="bg-green-900/20 p-3 rounded-lg border border-green-900/50"
-                >
-                  <div class="text-xs text-green-400">多头 (Long)</div>
-                  <div id="long-shares" class="text-2xl font-bold text-white">
-                    0
-                  </div>
-                  <div id="long-value" class="text-sm text-slate-400">
-                    $0.00
-                  </div>
+    <!-- 【关键】换用稳定版CDN，彻底解决API报错 -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; height: 100vh; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white">
+    <!-- 【核心布局】左K线 + 右操作，一屏铺满 -->
+    <div class="flex h-screen w-full">
+        <!-- 左侧：K线区域（占65%宽度） -->
+        <div class="w-[65%] p-4 flex flex-col gap-4">
+            <!-- 顶部状态栏 -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold">盲盘炒股挑战</h1>
+                    <p class="text-slate-400">标的行业: {{ industry }}</p>
                 </div>
-                <div
-                  class="bg-red-900/20 p-3 rounded-lg border border-red-900/50"
-                >
-                  <div class="text-xs text-red-400">空头 (Short)</div>
-                  <div id="short-shares" class="text-2xl font-bold text-white">
-                    0
-                  </div>
-                  <div id="short-value" class="text-sm text-slate-400">
-                    $0.00
-                  </div>
+                <div class="flex gap-8">
+                    <div class="text-right">
+                        <p class="text-slate-400 text-sm">可用现金</p>
+                        <p id="cash" class="text-2xl font-bold text-green-400">${{ initial_cash }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-slate-400 text-sm">净资产</p>
+                        <p id="net-value" class="text-2xl font-bold text-white">${{ initial_cash }}</p>
+                    </div>
                 </div>
-              </div>
             </div>
 
-            <!-- 交易面板 -->
-            <div
-              class="bg-slate-800 rounded-2xl p-6 border border-slate-700 flex-1"
-            >
-              <h3 class="text-lg font-bold mb-4">交易操作</h3>
-
-              <!-- 股数输入 -->
-              <div class="mb-4">
-                <label class="block text-sm text-slate-400 mb-1"
-                  >交易股数</label
-                >
-                <input
-                  type="number"
-                  id="share-input"
-                  value="10"
-                  min="1"
-                  class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <!-- 按钮网格 -->
-              <div class="grid grid-cols-2 gap-3 mb-6">
-                <button
-                  onclick="executeTrade('buy')"
-                  class="py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all"
-                >
-                  买入做多
-                </button>
-                <button
-                  onclick="executeTrade('sell')"
-                  class="py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-all"
-                >
-                  卖出多头
-                </button>
-                <button
-                  onclick="executeTrade('short')"
-                  class="py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all"
-                >
-                  卖空开仓
-                </button>
-                <button
-                  onclick="executeTrade('cover')"
-                  class="py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all"
-                >
-                  回补空头
-                </button>
-              </div>
-
-              <div class="h-px bg-slate-700 my-4"></div>
-
-              <button
-                onclick="nextDay()"
-                id="next-day-btn"
-                class="w-full py-4 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-xl transition-all"
-              >
-                下一个交易日 ▶
-              </button>
+            <!-- K线价格信息 -->
+            <div class="flex justify-between items-end px-2">
+                <div>
+                    <h2 id="current-price" class="text-3xl font-bold text-white">$0.00</h2>
+                    <p id="current-date" class="text-slate-400">-</p>
+                </div>
+                <p id="progress" class="text-slate-500">进度: 0/0</p>
             </div>
-          </div>
+
+            <!-- 蜡烛图容器（填满剩余高度） -->
+            <div id="candle-chart" class="flex-1 w-full bg-slate-800 rounded-xl border border-slate-700 overflow-hidden"></div>
         </div>
-      </div>
 
-      <!-- 结束弹窗 -->
-      <div
-        id="ended-modal"
-        class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-      >
-        <div
-          class="bg-slate-800 p-8 rounded-3xl max-w-md w-full border border-slate-600 text-center"
-        >
-          <h2 class="text-3xl font-bold mb-2">挑战结束</h2>
-          <p class="text-2xl text-yellow-400 mb-1">
-            这只股票是：<span id="reveal-symbol">-</span>
-          </p>
-          <p id="reveal-industry" class="text-slate-500 mb-8">-</p>
+        <!-- 右侧：操作&持仓面板（占35%宽度） -->
+        <div class="w-[35%] p-4 flex flex-col gap-4 overflow-y-auto bg-slate-900 border-l border-slate-800">
+            <!-- 交易操作面板 -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <h3 class="text-xl font-bold mb-6">交易操作</h3>
+                
+                <div class="mb-6">
+                    <label class="block text-sm text-slate-400 mb-2">交易股数</label>
+                    <input 
+                        type="number" 
+                        id="shares-input" 
+                        value="10" 
+                        min="1" 
+                        class="w-full bg-slate-700 border border-slate-600 rounded-lg p-4 text-white text-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                </div>
 
-          <div id="final-return" class="text-6xl font-black mb-2 text-white">
-            0.00%
-          </div>
-          <div id="final-value" class="text-2xl text-slate-300 mb-8">$0.00</div>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <button onclick="buyLong()" class="py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all text-lg">
+                        买入做多
+                    </button>
+                    <button onclick="sellLong()" class="py-4 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg transition-all text-lg">
+                        卖出多头
+                    </button>
+                    <button onclick="openShort()" class="py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all text-lg">
+                        卖空开仓
+                    </button>
+                    <button onclick="coverShort()" class="py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all text-lg">
+                        回补空头
+                    </button>
+                </div>
 
-          <button
-            onclick="startNewGame()"
-            class="w-full py-4 bg-white text-slate-900 font-bold rounded-xl"
-          >
-            再来一局
-          </button>
+                <button onclick="nextDay()" class="w-full py-5 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-xl transition-all text-xl">
+                    下一个交易日 ▶
+                </button>
+            </div>
+
+            <!-- 持仓面板 -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <h3 class="text-xl font-bold mb-6">当前持仓</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-green-900/20 p-5 rounded-lg border border-green-900/50">
+                        <div class="text-sm text-green-400 mb-2">多头持仓 (Long)</div>
+                        <div id="long-shares" class="text-4xl font-bold text-white">0</div>
+                        <div id="long-value" class="text-sm text-slate-400 mt-2">$0.00</div>
+                    </div>
+                    <div class="bg-red-900/20 p-5 rounded-lg border border-red-900/50">
+                        <div class="text-sm text-red-400 mb-2">空头持仓 (Short)</div>
+                        <div id="short-shares" class="text-4xl font-bold text-white">0</div>
+                        <div id="short-liability" class="text-sm text-slate-400 mt-2">负债: $0.00</div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
+    </div>
+
+    <!-- 结束弹窗 -->
+    <div id="result-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 p-8 rounded-3xl max-w-md w-full border border-slate-600 text-center">
+            <h2 class="text-3xl font-bold mb-2">挑战结束</h2>
+            <p class="text-2xl text-yellow-400 mb-1">这只股票是：{{ symbol }}</p>
+            <p class="text-slate-500 mb-8">{{ industry }}</p>
+            
+            <div id="final-return" class="text-6xl font-black mb-2 text-white">0.00%</div>
+            <div id="final-value" class="text-2xl text-slate-300 mb-8">$0.00</div>
+
+            <button onclick="location.reload()" class="w-full py-4 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-all">
+                再来一局 (刷新换股)
+            </button>
+        </div>
     </div>
 
     <script>
-      // 全局状态
-      let state = {
-        prices: [],
-        currentDayIndex: 0,
-        cash: 20000,
-        longShares: 0,
-        shortShares: 0,
-        symbol: "",
-        industry: "",
-        chart: null,
-      };
+        // 【核心】Django传入的真实数据
+        const allCandles = {{ candles_json|safe }};
 
-      // 格式化金额
-      const fmt = (n) =>
-        "$" +
-        n.toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
+        // 数据校验，无真实数据直接提示
+        if (!allCandles || allCandles.length < 120) {
+            document.body.innerHTML = `
+                <div class="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+                    <div class="text-center">
+                        <h1 class="text-3xl font-bold text-red-500 mb-4">真实数据获取失败</h1>
+                        <p class="text-slate-300 mb-6">未获取到有效的股票行情，请刷新页面重试</p>
+                        <button onclick="location.reload()" class="bg-blue-600 px-6 py-3 rounded-lg font-bold">刷新重试</button>
+                    </div>
+                </div>
+            `;
+        }
 
-      // 1. 开始新游戏
-      async function startNewGame() {
-        document.getElementById("setup-screen").classList.add("hidden");
-        document.getElementById("ended-modal").classList.add("hidden");
-        document.getElementById("game-screen").classList.remove("hidden");
-
-        // 显示加载中
-        document.getElementById("industry-name").textContent = "加载数据中...";
-
-        try {
-          const res = await fetch("/api/start");
-          const data = await res.json();
-
-          // 重置状态
-          state = {
-            prices: data.prices,
-            currentDayIndex: 90, // 从第90天开始
-            cash: data.initial_cash,
+        // 全局状态
+        let state = {
+            currentDay: 90, // 初始显示前90天真实数据
+            cash: {{ initial_cash }},
             longShares: 0,
             shortShares: 0,
-            symbol: data.symbol,
-            industry: data.industry,
-            chart: state.chart, // 保留 chart 引用
-          };
+            chart: null,
+            candleSeries: null
+        };
 
-          document.getElementById("industry-name").textContent = state.industry;
-          initChart();
-          updateUI();
-        } catch (e) {
-          alert("加载失败，请刷新重试");
-          console.error(e);
-        }
-      }
+        // 格式化金额
+        const fmtMoney = (num) => '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-      // 2. 初始化图表
-      function initChart() {
-        const ctx = document.getElementById("priceChart").getContext("2d");
-
-        if (state.chart) state.chart.destroy();
-
-        const visibleData = state.prices.slice(0, state.currentDayIndex + 1);
-
-        state.chart = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: visibleData.map((d) => d.date),
-            datasets: [
-              {
-                label: "Price",
-                data: visibleData.map((d) => d.price),
-                borderColor: "rgb(59, 130, 246)",
-                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                fill: true,
-                tension: 0.1,
-                pointRadius: 0,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: {
-                display: true,
-                grid: { display: false },
-                ticks: { maxTicksLimit: 10 },
-              },
-              y: { display: true, grid: { color: "rgba(255,255,255,0.05)" } },
-            },
-          },
-        });
-      }
-
-      // 3. 更新图表数据（不重新初始化，更快）
-      function updateChart() {
-        const visibleData = state.prices.slice(0, state.currentDayIndex + 1);
-        state.chart.data.labels = visibleData.map((d) => d.date);
-        state.chart.data.datasets[0].data = visibleData.map((d) => d.price);
-        state.chart.update("none");
-      }
-
-      // 4. 核心交易逻辑
-      function executeTrade(action) {
-        const input = document.getElementById("share-input");
-        let shares = parseInt(input.value);
-
-        if (isNaN(shares) || shares <= 0) {
-          alert("请输入有效的股数");
-          return;
-        }
-
-        const currentPrice = state.prices[state.currentDayIndex].price;
-        const cost = shares * currentPrice;
-
-        switch (action) {
-          case "buy":
-            if (state.cash >= cost) {
-              state.cash -= cost;
-              state.longShares += shares;
-            } else {
-              alert("现金不足！");
+        // 【修复】初始化蜡烛图，确保API正确
+        function initChart() {
+            const chartContainer = document.getElementById('candle-chart');
+            
+            // 确保库加载完成
+            if (!window.LightweightCharts) {
+                alert("图表库加载失败，请刷新页面");
+                return;
             }
-            break;
 
-          case "sell":
+            // 创建图表实例，适配容器大小
+            state.chart = window.LightweightCharts.createChart(chartContainer, {
+                width: chartContainer.clientWidth,
+                height: chartContainer.clientHeight,
+                layout: {
+                    background: { type: 'solid', color: '#1e293b' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { color: '#334155' },
+                    horzLines: { color: '#334155' },
+                },
+                crosshair: {
+                    mode: window.LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                },
+                timeScale: {
+                    borderColor: '#334155',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // 创建蜡烛图系列，绿涨红跌
+            state.candleSeries = state.chart.addCandlestickSeries({
+                upColor: '#22c55e',
+                downColor: '#ef4444',
+                borderDownColor: '#ef4444',
+                borderUpColor: '#22c55e',
+                wickDownColor: '#ef4444',
+                wickUpColor: '#22c55e',
+            });
+
+            // 窗口大小变化自动适配
+            window.addEventListener('resize', () => {
+                state.chart.applyOptions({ 
+                    width: chartContainer.clientWidth,
+                    height: chartContainer.clientHeight
+                });
+            });
+
+            // 初始加载前90天数据
+            updateChartData();
+        }
+
+        // 更新图表数据
+        function updateChartData() {
+            if (!state.candleSeries) return;
+            const visibleCandles = allCandles.slice(0, state.currentDay + 1);
+            state.candleSeries.setData(visibleCandles);
+            state.chart.timeScale().fitContent();
+        }
+
+        // 获取当前收盘价
+        function getCurrentPrice() {
+            return allCandles[state.currentDay].close;
+        }
+
+        // 获取输入股数
+        function getInputShares() {
+            return Math.max(1, parseInt(document.getElementById('shares-input').value) || 10);
+        }
+
+        // 交易逻辑
+        function buyLong() {
+            const shares = getInputShares();
+            const price = getCurrentPrice();
+            const cost = shares * price;
+            if (state.cash >= cost) {
+                state.cash -= cost;
+                state.longShares += shares;
+                updateUI();
+            } else {
+                alert('现金不足！');
+            }
+        }
+
+        function sellLong() {
+            const shares = getInputShares();
+            const price = getCurrentPrice();
             if (state.longShares >= shares) {
-              state.cash += cost;
-              state.longShares -= shares;
+                state.cash += shares * price;
+                state.longShares -= shares;
+                updateUI();
             } else {
-              alert("多头持仓不足！");
+                alert('多头持仓不足！');
             }
-            break;
+        }
 
-          case "short":
-            // 做空：需要保证金（这里简化为需要100%现金保证）
-            if (state.cash >= cost) {
-              state.cash += cost; // 做空获得现金
-              state.shortShares += shares;
+        function openShort() {
+            const shares = getInputShares();
+            const price = getCurrentPrice();
+            const margin = shares * price;
+            if (state.cash >= margin) {
+                state.cash += margin;
+                state.shortShares += shares;
+                updateUI();
             } else {
-              alert("保证金（现金）不足！");
+                alert('保证金不足！');
             }
-            break;
+        }
 
-          case "cover":
+        function coverShort() {
+            const shares = getInputShares();
+            const price = getCurrentPrice();
+            const cost = shares * price;
             if (state.shortShares >= shares) {
-              state.cash -= cost; // 回补花掉现金
-              state.shortShares -= shares;
+                state.cash -= cost;
+                state.shortShares -= shares;
+                updateUI();
             } else {
-              alert("空头持仓不足！");
+                alert('空头持仓不足！');
             }
-            break;
         }
-        updateUI();
-      }
 
-      // 5. 下一天
-      function nextDay() {
-        if (state.currentDayIndex < state.prices.length - 1) {
-          state.currentDayIndex++;
-          updateChart();
-          updateUI();
-        } else {
-          endGame();
+        // 下一个交易日
+        function nextDay() {
+            if (state.currentDay < allCandles.length - 1) {
+                state.currentDay++;
+                updateChartData();
+                updateUI();
+            } else {
+                showResult();
+            }
         }
-      }
 
-      // 6. 更新所有 UI 显示
-      function updateUI() {
-        const currentData = state.prices[state.currentDayIndex];
-        const currentPrice = currentData.price;
+        // 更新UI
+        function updateUI() {
+            const currentCandle = allCandles[state.currentDay];
+            const currentPrice = currentCandle.close;
 
-        // 顶部信息
-        document.getElementById("current-price").textContent =
-          fmt(currentPrice);
-        document.getElementById("current-date").textContent = currentData.date;
-        document.getElementById("progress-text").textContent =
-          `${state.currentDayIndex - 90} / ${state.prices.length - 90}`;
+            // 基础信息
+            document.getElementById('current-price').textContent = fmtMoney(currentPrice);
+            document.getElementById('current-date').textContent = currentCandle.date_str;
+            document.getElementById('progress').textContent = `进度: ${state.currentDay - 90} / ${allCandles.length - 90}`;
 
-        // 计算资产
-        const longValue = state.longShares * currentPrice;
-        // 空头市值：欠别人的股票，按当前价计算是负债
-        const shortLiability = state.shortShares * currentPrice;
+            // 资产计算
+            const longValue = state.longShares * currentPrice;
+            const shortLiability = state.shortShares * currentPrice;
+            const netValue = state.cash + longValue - shortLiability;
 
-        // 净资产 = 现金 + 多头市值 - 空头负债
-        const portfolioValue = state.cash + longValue - shortLiability;
+            // 更新显示
+            document.getElementById('cash').textContent = fmtMoney(state.cash);
+            document.getElementById('net-value').textContent = fmtMoney(netValue);
+            document.getElementById('long-shares').textContent = state.longShares;
+            document.getElementById('long-value').textContent = fmtMoney(longValue);
+            document.getElementById('short-shares').textContent = state.shortShares;
+            document.getElementById('short-liability').textContent = `负债: ${fmtMoney(shortLiability)}`;
+        }
 
-        document.getElementById("cash-display").textContent = fmt(state.cash);
-        document.getElementById("portfolio-display").textContent =
-          fmt(portfolioValue);
+        // 最终结果
+        function showResult() {
+            const currentPrice = getCurrentPrice();
+            const finalValue = state.cash + (state.longShares * currentPrice) - (state.shortShares * currentPrice);
+            const returnRate = ((finalValue - 20000) / 20000) * 100;
 
-        // 持仓显示
-        document.getElementById("long-shares").textContent = state.longShares;
-        document.getElementById("long-value").textContent = fmt(longValue);
+            document.getElementById('final-value').textContent = fmtMoney(finalValue);
+            const returnEl = document.getElementById('final-return');
+            returnEl.textContent = (returnRate >= 0 ? '+' : '') + returnRate.toFixed(2) + '%';
+            returnEl.className = `text-6xl font-black mb-2 ${returnRate >= 0 ? 'text-green-400' : 'text-red-400'}`;
 
-        document.getElementById("short-shares").textContent = state.shortShares;
-        document.getElementById("short-value").textContent =
-          `负债: ${fmt(shortLiability)}`;
-      }
+            document.getElementById('result-modal').classList.remove('hidden');
+        }
 
-      // 7. 游戏结束
-      function endGame() {
-        const currentPrice = state.prices[state.currentDayIndex].price;
-        const longValue = state.longShares * currentPrice;
-        const shortLiability = state.shortShares * currentPrice;
-        const finalValue = state.cash + longValue - shortLiability;
-        const returns = ((finalValue - 20000) / 20000) * 100;
-
-        document.getElementById("reveal-symbol").textContent = state.symbol;
-        document.getElementById("reveal-industry").textContent = state.industry;
-        document.getElementById("final-value").textContent = fmt(finalValue);
-
-        const returnEl = document.getElementById("final-return");
-        returnEl.textContent =
-          (returns >= 0 ? "+" : "") + returns.toFixed(2) + "%";
-        returnEl.className = `text-6xl font-black mb-2 ${returns >= 0 ? "text-green-400" : "text-red-400"}`;
-
-        document.getElementById("ended-modal").classList.remove("hidden");
-      }
+        // 【关键】页面完全加载后再初始化，确保CDN和数据都就绪
+        window.addEventListener('load', () => {
+            initChart();
+            updateUI();
+        });
     </script>
-  </body>
+</body>
 </html>

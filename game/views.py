@@ -2,74 +2,62 @@
 import random
 import yfinance as yf
 from datetime import datetime, timedelta
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+from django.shortcuts import render
+from django.http import HttpResponseServerError
 import json
 
-# 我们的股票池
+# 股票池，所有数据只会从这里的标的拉取真实行情
 STOCK_POOL = [
     {"symbol": "NVDA", "industry": "科技行业 (半导体)"},
     {"symbol": "TSLA", "industry": "新能源汽车行业"},
     {"symbol": "AAPL", "industry": "科技行业 (消费电子)"},
     {"symbol": "MSFT", "industry": "科技行业 (软件)"},
-    {"symbol": "GOOGL", "industry": "科技行业 (互联网)"},
-    {"symbol": "AMZN", "industry": "电子商务行业"},
     {"symbol": "SPY", "industry": "美股指数"},
+    {"symbol": "BABA", "industry": "中概电商"},
+    {"symbol": "PDD", "industry": "中概电商"},
+    {"symbol": "AMD", "industry": "半导体行业"},
+    {"symbol": "GOOGL", "industry": "互联网行业"},
 ]
 
-def fetch_stock_data(symbol):
-    """获取过去一年的真实数据"""
+def index(request):
+    # 随机选一只股票
+    stock = random.choice(STOCK_POOL)
+    # 时间范围：过去一整年
     end_date = datetime.now()
     start_date = end_date - timedelta(days=365)
-    
+
     try:
-        # 使用 yfinance 获取数据
-        ticker = yf.Ticker(symbol)
+        # 【唯一数据源】只从yfinance拉取真实OHLC数据
+        ticker = yf.Ticker(stock['symbol'])
         hist = ticker.history(start=start_date, end=end_date, interval="1d")
-        
-        # 格式化数据
-        prices = []
+
+        # 清洗真实数据
+        candles = []
         for index, row in hist.iterrows():
-            prices.append({
-                "date": index.strftime("%Y-%m-%d"),
-                "price": float(row['Close'])
-            })
-        return prices
-    except Exception as e:
-        print(f"获取数据出错: {e}")
-        # 保底模拟数据
-        return generate_mock_data()
+            # 只保留完整的OHLC数据，跳过空值/停牌日
+            if not row[['Open', 'High', 'Low', 'Close']].isnull().any():
+                candles.append({
+                    "time": int(index.timestamp()),
+                    "date_str": index.strftime("%Y-%m-%d"),
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close'])
+                })
 
-def generate_mock_data():
-    """生成模拟数据以防 API 失效"""
-    base_price = 100 + random.random() * 400
-    data = []
-    start_date = datetime.now() - timedelta(days=252)
-    for i in range(252):
-        date = start_date + timedelta(days=i)
-        change = (random.random() - 0.5) * 0.05
-        base_price = base_price * (1 + change)
-        data.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "price": max(base_price, 1)
+        # 【严格校验】数据不足直接报错，绝不生成假数据
+        if len(candles) < 120:
+            return HttpResponseServerError("获取到的真实数据长度不足，无法开始游戏，请刷新重试")
+
+        # 只有真实数据校验通过，才会渲染页面
+        return render(request, 'index.html', {
+            "symbol": stock['symbol'],
+            "industry": stock['industry'],
+            "candles_json": json.dumps(candles),
+            "initial_cash": 20000
         })
-    return data
 
-@csrf_exempt
-@require_http_methods(["GET"])
-def start_game(request):
-    """开始新游戏：随机选股票并获取数据"""
-    stock = random.choice(STOCK_POOL)
-    prices = fetch_stock_data(stock['symbol'])
-    
-    # 确保数据足够长
-    if len(prices) < 120:
-        prices = generate_mock_data()
-
-    return JsonResponse({
-        "symbol": stock['symbol'],
-        "industry": stock['industry'],
-        "prices": prices,
-        "initial_cash": 20000
-    })
+    except Exception as e:
+        # 拉取失败直接报错，绝不兜底假数据
+        print(f"拉取真实数据失败: {str(e)}")
+        return HttpResponseServerError(f"获取真实股票数据失败，请刷新重试。错误信息：{str(e)}")
