@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>盲盘炒股挑战</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 【关键】换用稳定版CDN，彻底解决API报错 -->
+    <!-- 稳定版图表CDN -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,9 +13,9 @@
     </style>
 </head>
 <body class="bg-slate-900 text-white">
-    <!-- 【核心布局】左K线 + 右操作，一屏铺满 -->
+    <!-- 左K线 + 右操作 一屏布局 -->
     <div class="flex h-screen w-full">
-        <!-- 左侧：K线区域（占65%宽度） -->
+        <!-- 左侧：K线区域 -->
         <div class="w-[65%] p-4 flex flex-col gap-4">
             <!-- 顶部状态栏 -->
             <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
@@ -44,11 +44,11 @@
                 <p id="progress" class="text-slate-500">进度: 0/0</p>
             </div>
 
-            <!-- 蜡烛图容器（填满剩余高度） -->
+            <!-- 蜡烛图容器 -->
             <div id="candle-chart" class="flex-1 w-full bg-slate-800 rounded-xl border border-slate-700 overflow-hidden"></div>
         </div>
 
-        <!-- 右侧：操作&持仓面板（占35%宽度） -->
+        <!-- 右侧：操作&持仓面板 -->
         <div class="w-[35%] p-4 flex flex-col gap-4 overflow-y-auto bg-slate-900 border-l border-slate-800">
             <!-- 交易操作面板 -->
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
@@ -80,9 +80,34 @@
                     </button>
                 </div>
 
-                <button onclick="nextDay()" class="w-full py-5 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-xl transition-all text-xl">
+                <!-- 原下一个交易日按钮 -->
+                <button 
+                    id="next-day-btn"
+                    onclick="nextDay()" 
+                    class="w-full py-5 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-800 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-xl"
+                >
                     下一个交易日 ▶
                 </button>
+
+                <!-- 【新增】快进按钮组 -->
+                <div class="grid grid-cols-2 gap-4 pt-2 mt-4">
+                    <button 
+                        id="fast-5-btn"
+                        onclick="fastForward(5)" 
+                        class="py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-all"
+                    >
+                        快进5天 (一周)
+                    </button>
+                    <button 
+                        id="fast-20-btn"
+                        onclick="fastForward(20)" 
+                        class="py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-all"
+                    >
+                        快进20天 (一个月)
+                    </button>
+                </div>
+
+                
             </div>
 
             <!-- 持仓面板 -->
@@ -121,7 +146,7 @@
     </div>
 
     <script>
-        // 【核心】Django传入的真实数据
+        // Django传入的真实K线数据
         const allCandles = {{ candles_json|safe }};
 
         // 数据校验，无真实数据直接提示
@@ -150,17 +175,16 @@
         // 格式化金额
         const fmtMoney = (num) => '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        // 【修复】初始化蜡烛图，确保API正确
+        // 初始化蜡烛图
         function initChart() {
             const chartContainer = document.getElementById('candle-chart');
             
-            // 确保库加载完成
             if (!window.LightweightCharts) {
                 alert("图表库加载失败，请刷新页面");
                 return;
             }
 
-            // 创建图表实例，适配容器大小
+            // 创建图表实例
             state.chart = window.LightweightCharts.createChart(chartContainer, {
                 width: chartContainer.clientWidth,
                 height: chartContainer.clientHeight,
@@ -185,7 +209,7 @@
                 },
             });
 
-            // 创建蜡烛图系列，绿涨红跌
+            // 创建蜡烛图系列
             state.candleSeries = state.chart.addCandlestickSeries({
                 upColor: '#22c55e',
                 downColor: '#ef4444',
@@ -195,7 +219,7 @@
                 wickUpColor: '#22c55e',
             });
 
-            // 窗口大小变化自动适配
+            // 窗口大小自适应
             window.addEventListener('resize', () => {
                 state.chart.applyOptions({ 
                     width: chartContainer.clientWidth,
@@ -203,7 +227,6 @@
                 });
             });
 
-            // 初始加载前90天数据
             updateChartData();
         }
 
@@ -213,6 +236,16 @@
             const visibleCandles = allCandles.slice(0, state.currentDay + 1);
             state.candleSeries.setData(visibleCandles);
             state.chart.timeScale().fitContent();
+            // 快进后更新按钮禁用状态
+            updateButtonStatus();
+        }
+
+        // 更新按钮禁用状态（到最后一天禁用所有按钮）
+        function updateButtonStatus() {
+            const isEnded = state.currentDay >= allCandles.length - 1;
+            document.getElementById('next-day-btn').disabled = isEnded;
+            document.getElementById('fast-5-btn').disabled = isEnded;
+            document.getElementById('fast-20-btn').disabled = isEnded;
         }
 
         // 获取当前收盘价
@@ -223,6 +256,25 @@
         // 获取输入股数
         function getInputShares() {
             return Math.max(1, parseInt(document.getElementById('shares-input').value) || 10);
+        }
+
+        // 【新增】快进核心函数
+        function fastForward(days) {
+            const maxDay = allCandles.length - 1;
+            // 计算目标天数，不超过最大值
+            const targetDay = Math.min(state.currentDay + days, maxDay);
+            
+            // 更新当前天数
+            state.currentDay = targetDay;
+            
+            // 更新图表和UI
+            updateChartData();
+            updateUI();
+
+            // 如果到了最后一天，触发结束弹窗
+            if (state.currentDay >= maxDay) {
+                showResult();
+            }
         }
 
         // 交易逻辑
@@ -326,10 +378,11 @@
             document.getElementById('result-modal').classList.remove('hidden');
         }
 
-        // 【关键】页面完全加载后再初始化，确保CDN和数据都就绪
+        // 页面加载完成初始化
         window.addEventListener('load', () => {
             initChart();
             updateUI();
+            updateButtonStatus();
         });
     </script>
 </body>
